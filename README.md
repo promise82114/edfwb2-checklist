@@ -64,3 +64,5 @@ Google Drive 提供可選的手動雲端進度上傳／下載；未連接仍使�
 DLC 取得條件依 https://w.atwiki.jp/edfwb2/pages/188.html、https://w.atwiki.jp/edfwb2/pages/14.html 與 https://w.atwiki.jp/edfwb2/pages/21.html 核對。`dist/acquisition.js` 保存稳定 ID 對應的方式、EX 關卡／難度與 IMP 通關數條件；`dist/missions.js` 展開 120 關候選池。特典角色導入後也可救出，不能把購買附贈的 LV1 與後續高階救出武器混為同一來源。
 
 關卡五種補收模式可執行 `node verify-mission-modes.mjs` 驗證，涵蓋武器去重、角色取得／復原、DLC 候選數增減、收藏、搜尋、無角色關卡與手機版面。
+
+武器小卡下方的相關角色版本可獨立勾選，勾武器不推定取得任何角色。剛勾選的救出武器在已展開的關卡／收藏區暫時保留，收合或切換模式後移除；暫留僅為畫面狀態，不影響缺漏統計，也不寫入備份。`node verify-linked-collection.mjs` 驗證兩種取得狀態、角色版本、暫留、收藏同步與復原。

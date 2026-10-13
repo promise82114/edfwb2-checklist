@@ -22,7 +22,7 @@ try{
  await page.locator('#search').fill('EX16');assert.equal(await page.locator('#missionList tr').count(),1);assert.equal(await fav.count(),1);
  await page.locator('[data-weapon-level="2"]').click();assert.match(await fav.locator('.mission-summary').textContent(),/LV2/);
  const w=fav.locator('.item-check').first(),id=await w.getAttribute('data-id');await w.click();
- assert.equal(await fav.locator(`[data-id="${id}"]`).count(),0);assert.equal(await fav.locator('[data-fixed-count]').textContent(),fixed);
+ assert.equal(await fav.locator(`[data-id="${id}"]`).isChecked(),true);assert.equal(await fav.locator('[data-fixed-count]').textContent(),fixed);
  await page.locator('#undo').click();assert.ok(await fav.locator(`[data-id="${id}"]`).count()>0);
  assert.equal(await page.locator('#missionFavorites').evaluate(e=>getComputedStyle(e).overflowY),'visible');
  assert.equal(await page.locator('#missionFavorites').evaluate(e=>e.scrollHeight<=e.clientHeight+2),true);

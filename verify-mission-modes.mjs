@@ -11,10 +11,10 @@ try{
  const row=page.locator('[data-mission-row="'+code+'"]');await row.locator('summary').click();
  const expected=await page.evaluate(code=>{const m=missionData().rows.find(m=>m.code===code);return {cards:m.weaponTargets.length,group:m.weaponTargets.find(t=>t.characters.length>1)};},code);
  assert.equal(await row.locator('.weapon-target').count(),expected.cards);
- const card=row.locator('[data-weapon-id="'+expected.group.weapon.id+'"]');assert.equal(await card.count(),1);assert.equal(await card.locator('.item-check').count(),1);assert.ok(await card.locator('.mission-owner').count()>0);
- assert.equal(await row.locator('.item-check').count(),expected.cards); // one input per unique weapon, not per owner
+ const card=row.locator('[data-weapon-id="'+expected.group.weapon.id+'"]');assert.equal(await card.count(),1);assert.equal(await card.locator('.mission-weapon .item-check').count(),1);assert.ok(await card.locator('.mission-owner-group').count()>0);
+ assert.equal(await row.locator('.mission-weapon .item-check').count(),expected.cards); // one input per unique weapon, not per owner
  await page.screenshot({path:'outputs/mission-weapons-compact.png'});
- const id=expected.group.weapon.id;await card.locator('input').click();assert.equal(await row.locator('[data-weapon-id="'+id+'"]').count(),0);await page.locator('#undo').click();assert.equal(await row.locator('[data-weapon-id="'+id+'"]').count(),1);
+ const id=expected.group.weapon.id;await card.locator('.mission-weapon input').click();assert.equal(await row.locator('[data-weapon-id="'+id+'"]').count(),1);assert.equal(await card.locator('.mission-weapon input').isChecked(),true);await page.locator('#undo').click();assert.equal(await row.locator('[data-weapon-id="'+id+'"]').count(),1);
  // DLC selection changes the full candidate denominator in both modes.
  const m05=page.locator('[data-mission-row="M05"]'),before=await m05.locator('[data-fixed-count]').textContent();assert.match(before,/名角色/);
  await page.locator('#settingsOpen').click();await page.locator('#content-character-6').check();await page.locator('#settingsDialog .close').click();
@@ -22,7 +22,7 @@ try{
  await page.locator('[data-mission-mode="characters"]').click();assert.equal(await page.locator('#missionTable th:last-child').textContent(),'未取得角色');assert.equal(await page.locator('#missionOther').isVisible(),false);
  assert.equal(parseInt(await m05.locator('[data-fixed-count]').textContent()),parseInt(before)+1);
  await m05.locator('summary').click();const professor=await page.evaluate(()=>catalog.items.find(i=>i.name==='プロフェッサー'&&i.kind==='characters').id);
- assert.equal(await m05.locator('[data-id="'+professor+'"]').count(),1);
+ await m05.locator('[data-id="'+professor+'"]').waitFor();assert.equal(await m05.locator('[data-id="'+professor+'"]').count(),1);
  await m05.locator('.favorite-star').click();const fav=page.locator('[data-favorite-row="M05"]');await fav.locator('summary').click();assert.equal(await fav.locator('[data-id="'+professor+'"]').count(),1);
  const fixed=await m05.locator('[data-fixed-count]').textContent();await fav.locator('[data-id="'+professor+'"]').click();assert.equal(await m05.locator('[data-id="'+professor+'"]').count(),0);assert.equal(await fav.locator('[data-id="'+professor+'"]').count(),0);assert.equal(await m05.locator('[data-fixed-count]').textContent(),fixed);
  await page.locator('#undo').click();assert.equal(await m05.locator('[data-id="'+professor+'"]').count(),1);
