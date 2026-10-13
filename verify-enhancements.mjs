@@ -1,0 +1,31 @@
+import {createRequire} from 'node:module';
+import assert from 'node:assert/strict';
+const require=createRequire('C:/Users/promi/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/placeholder.js');
+const {chromium}=require('playwright');
+const browser=await chromium.launch({headless:true,channel:'msedge'});
+try {
+const context=await browser.newContext({viewport:{width:1440,height:1000}});
+const page=await context.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));
+await page.goto('http://127.0.0.1:4174');await page.locator('#list tr').first().waitFor();
+const missing=await page.evaluate(()=>window.EDF_CATALOG.items.filter(i=>!window.EDF_TRANSLATIONS.names[i.name]||(i.kind==='weapons'&&!window.EDF_DETAILS.weaponFamilies[i.family])||(i.kind==='characters'&&!window.EDF_DETAILS.characters[i.name])).map(i=>i.name));assert.deepEqual(missing,[]);
+assert.ok(await page.locator('.item-translation').count()>600);
+const owner=page.locator('.owner-button').first();const before=await page.locator('.item-check').first().isChecked();
+await owner.hover();await page.locator('#appearanceTooltip').waitFor();assert.match(await page.locator('#appearanceTooltip').textContent(),/M\d/);
+await owner.click();assert.equal(await page.locator('.item-check').first().isChecked(),before);
+await page.screenshot({path:'outputs/owner-tooltip.png'});
+await page.keyboard.press('Escape');assert.equal(await page.locator('#appearanceTooltip').isVisible(),false);
+await page.locator('#search').focus();await owner.focus();assert.equal(await page.locator('#appearanceTooltip').isVisible(),true);await page.keyboard.press('Escape');
+await page.locator('[data-tab="characters"]').click();assert.equal(await page.locator('#variantHead').isVisible(),false);
+assert.equal(await page.locator('#list tr').first().locator('td').count(),5);
+assert.match(await page.locator('.item-name').first().textContent(),/α|β|γ|無印/);
+const chinese=await page.locator('.item-translation').first().textContent();await page.locator('#search').fill(chinese);assert.ok(await page.locator('#list tr').count()>0);
+await page.locator('#search').fill('M20');assert.ok(await page.locator('#list tr').count()>0);assert.match(await page.locator('.appearance-cell').first().textContent(),/M18–24|M20/);
+await page.locator('#search').fill('EX03');assert.ok(await page.locator('#list tr').count()>0);
+await page.locator('#search').fill('コロニストβ');assert.ok(await page.locator('#list tr').count()>0);assert.doesNotMatch(await page.locator('.item-name').first().textContent(),/βα/);
+await page.locator('#search').fill('');await page.screenshot({path:'outputs/characters.png'});
+await page.setViewportSize({width:390,height:844});await page.screenshot({path:'outputs/characters-mobile.png'});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+await page.locator('[data-tab="weapons"]').click();await page.locator('.owner-button').first().evaluate(b=>b.click());assert.equal(await page.locator('#appearanceTooltip').isVisible(),true);
+assert.equal(await page.locator('#appearanceTooltip').evaluate(b=>{const r=b.getBoundingClientRect();return r.left>=0&&r.right<=innerWidth&&r.top>=0&&r.bottom<=innerHeight;}),true);
+await page.locator('[data-tab="accessories"]').click();assert.equal(await page.locator('#detailHead').isVisible(),false);assert.ok(await page.locator('.item-translation').count()>200);
+assert.deepEqual(errors,[]);console.log('PASS: bilingual coverage, appended variants, Chinese/mission search, owner hover/focus/tap, no accidental check, mobile bounds');
+} finally {await browser.close();}
