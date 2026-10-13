@@ -1576,6 +1576,36 @@ window.EDF_DETAILS = {
     },
     {
       "start": 96,
+      "end": 98,
+      "extra": false,
+      "pools": {
+        "EDF3&4": [
+          "α",
+          "β",
+          "γ"
+        ],
+        "EDF5&6": [
+          "α",
+          "β",
+          "γ"
+        ],
+        "アジア": [
+          "β",
+          "γ"
+        ],
+        "アフリカ": [
+          "α",
+          "β",
+          "γ"
+        ],
+        "南北アメリカ": [
+          "α"
+        ]
+      },
+      "uncertain": []
+    },
+    {
+      "start": 103,
       "end": 103,
       "extra": false,
       "pools": {
@@ -2658,5 +2688,12 @@ window.EDF_DETAILS = {
       "note": "DLC 武器；部分型號另有武器箱／通關取得條件",
       "source": "https://w.atwiki.jp/edfwb2/pages/78.html"
     }
-  }
+  },
+  "noRescueMissions": [
+    99,
+    100,
+    101,
+    102,
+    104
+  ]
 };

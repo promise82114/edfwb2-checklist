@@ -1,3 +1,4 @@
+import {enableAllContent} from './verify-content-support.mjs';
 import {createRequire} from 'node:module';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
@@ -7,7 +8,7 @@ const browser=await chromium.launch({headless:true,channel:'msedge'});
 try{
  const context=await browser.newContext({viewport:{width:1366,height:768}}),page=await context.newPage(),errors=[];
  page.on('pageerror',e=>errors.push(e.message));
- await page.goto('http://127.0.0.1:4174');await page.locator('[data-tab="missions"]').click();
+ await page.goto(process.env.TEST_URL||'http://127.0.0.1:4174');await enableAllContent(page);await page.locator('[data-tab="missions"]').click();
  const main=page.locator('#missionList [data-mission-row="M01"]'),star=main.locator('.favorite-star');
  const fixed=await main.locator('[data-fixed-count]').textContent();
  assert.equal(await star.textContent(),'☆');await star.click();
@@ -29,7 +30,7 @@ try{
  await page.locator('#favoriteTitle').scrollIntoViewIfNeeded();await page.screenshot({path:'outputs/favorites-desktop.png'});
  await page.reload();await page.locator('[data-tab="missions"]').click();assert.equal(await fav.count(),1);
  assert.equal(await fav.locator('.mission-details').getAttribute('open'),null);
- const other=await context.newPage();await other.goto('http://127.0.0.1:4174');await other.locator('[data-tab="missions"]').click();
+ const other=await context.newPage();await other.goto(process.env.TEST_URL||'http://127.0.0.1:4174');await other.locator('[data-tab="missions"]').click();
  await fav.locator('.favorite-star').click();await other.locator('#favoriteEmpty').waitFor({state:'visible'});
  await page.locator('#undo').click();await other.locator('[data-favorite-row="M01"]').waitFor();
  await page.locator('#backupOpen').click();const downloaded=page.waitForEvent('download');await page.locator('#export').click();

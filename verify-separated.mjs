@@ -1,3 +1,4 @@
+import {enableAllContent} from './verify-content-support.mjs';
 import {createRequire} from 'node:module';
 import assert from 'node:assert/strict';
 const require=createRequire('C:/Users/promi/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/placeholder.js');
@@ -5,9 +6,9 @@ const {chromium}=require('playwright');
 const browser=await chromium.launch({headless:true,channel:'msedge'});
 try{
  const page=await browser.newPage({viewport:{width:1366,height:768}}),errors=[];page.on('pageerror',e=>errors.push(e.message));
- await page.goto('http://127.0.0.1:4174');
- const groups=await page.evaluate(()=>Object.fromEntries(['weapons','characters','accessories','dlcWeapons','dlcCharacters'].map(key=>{const kind=key==='dlcWeapons'?'weapons':key==='dlcCharacters'?'characters':key;const extra=key.startsWith('dlc');return [key,window.EDF_CATALOG.items.filter(i=>i.kind===kind&&(kind==='accessories'||!!i.extra===extra)).map(i=>({id:i.id,variant:i.variant}))];})));
- assert.equal(groups.weapons.length+groups.dlcWeapons.length,688);assert.equal(groups.characters.length+groups.dlcCharacters.length,313);
+ await page.goto(process.env.TEST_URL||'http://127.0.0.1:4174');await enableAllContent(page);
+ const groups=await page.evaluate(()=>Object.fromEntries(['weapons','characters','accessories','dlcWeapons','dlcCharacters'].map(key=>{const kind=key==='dlcWeapons'?'weapons':key==='dlcCharacters'?'characters':key;const extra=key.startsWith('dlc');return [key,window.EDF_CATALOG.items.filter(i=>i.kind===kind&&!window.EDF_CONTENT.excluded.includes(i.id)&&(kind==='accessories'||!!i.extra===extra)).map(i=>({id:i.id,variant:i.variant}))];})));
+ assert.equal(groups.weapons.length+groups.dlcWeapons.length,685);assert.equal(groups.characters.length+groups.dlcCharacters.length,313);
  const cards=await page.locator('#stats .stat').evaluateAll(es=>es.map(e=>({key:e.dataset.stat,top:e.offsetTop})));
  assert.equal(cards.length,5);assert.equal(cards[0].top,cards[2].top);assert.ok(cards[3].top>cards[0].top);assert.equal(cards[3].top,cards[4].top);
  const owned=[];
