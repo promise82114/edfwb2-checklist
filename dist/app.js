@@ -42,6 +42,7 @@ function sectionItems(key=activeView){const s=sections[key];return availableItem
 let section='weapons', filter='missing', current=[], undoStack=[], pendingImport=null, storageError='', recovered=false,missionLevel=1,missionRows=[],missionOtherExpanded=false;
 const fresh=()=>({app:'edfwb2-collection',schema:1,catalogVersion:catalog.version,updatedAt:Date.now(),entries:{},favorites:{},content:{}});
 function validate(raw){
+  if(raw?.schemaVersion!==undefined)return window.SideProjectProgress.unpack(raw,window.SIDE_PROJECT_CLOUD_CONFIG.projectId,validate);
   if(!raw||raw.app!=='edfwb2-collection'||raw.schema!==1||!raw.entries||typeof raw.entries!=='object'||Array.isArray(raw.entries))throw Error('這不是支援的 EDF WB2 備份檔。');
   const out=fresh();let unknown=0;
   for(const [id,e] of Object.entries(raw.entries)){
@@ -143,7 +144,7 @@ function switchSection(view){activeView=view;const key=sections[view]?.kind||vie
 }
 function download(data){const blob=new Blob([JSON.stringify({...data,exportedAt:new Date().toISOString()},null,2)],{type:'application/json'});const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='edfwb2-progress-'+new Date().toLocaleDateString('sv-SE')+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),10000);}
 function backupInfo(){try{const t=localStorage.getItem(META);$('lastBackup').textContent=t?new Date(Number(t)).toLocaleString('zh-TW'):'尚未備份';}catch{$('lastBackup').textContent='無法讀取備份時間';}const list=snapshots();$('snapshots').innerHTML=list.map((x,i)=>'<option value="'+i+'">'+escape(new Date(x.at).toLocaleString('zh-TW')+' · '+x.label+' · '+Object.values(x.data.entries).filter(e=>e.owned).length+' 項')+'</option>').join('');$('restoreSnapshot').disabled=!list.length;}
-function applyImport(data,mode){mergeLatest();saveSnapshot('匯入前');const changes=catalog.items.map(i=>({id:i.id,before:owned(i)}));if(data.content!==undefined)changes.push(...[...contentIds].map(id=>({id,before:contentEnabled(id),type:'content'})));if(data.favorites!==undefined)changes.push(...[...missionIds].map(id=>({id,before:favorite(id),type:'favorite'})));undoStack.push(changes);const now=Date.now();for(const i of catalog.items){if(mode==='merge'){if(data.entries[i.id]?.owned)state.entries[i.id]={owned:true,updatedAt:now};}else state.entries[i.id]={owned:!!data.entries[i.id]?.owned,updatedAt:now};}if(data.favorites!==undefined){state.favorites??={};for(const id of missionIds)if(mode==='replace'||data.favorites[id]?.favorite)state.favorites[id]={favorite:!!data.favorites[id]?.favorite,updatedAt:now};}if(data.content!==undefined){state.content??={};for(const id of contentIds)if(mode==='replace'||data.content[id]?.enabled)state.content[id]={enabled:!!data.content[id]?.enabled,updatedAt:now};}persist();render();backupInfo();$('backupMessage').textContent=mode==='merge'?'已合併取得進度、收藏與使用者設定。':'已還原備份（舊版備份會保留目前收藏與使用者設定）。';$('importPreview').hidden=true;pendingImport=null;}
+function applyImport(data,mode,{requireSnapshot=false}={}){mergeLatest();if(!saveSnapshot('匯入前')&&requireSnapshot)throw Error('無法保留本機快照，已停止雲端還原。請先匯出備份。');const changes=catalog.items.map(i=>({id:i.id,before:owned(i)}));if(data.content!==undefined)changes.push(...[...contentIds].map(id=>({id,before:contentEnabled(id),type:'content'})));if(data.favorites!==undefined)changes.push(...[...missionIds].map(id=>({id,before:favorite(id),type:'favorite'})));undoStack.push(changes);const now=Date.now();for(const i of catalog.items){if(mode==='merge'){if(data.entries[i.id]?.owned)state.entries[i.id]={owned:true,updatedAt:now};}else state.entries[i.id]={owned:!!data.entries[i.id]?.owned,updatedAt:now};}if(data.favorites!==undefined){state.favorites??={};for(const id of missionIds)if(mode==='replace'||data.favorites[id]?.favorite)state.favorites[id]={favorite:!!data.favorites[id]?.favorite,updatedAt:now};}if(data.content!==undefined){state.content??={};for(const id of contentIds)if(mode==='replace'||data.content[id]?.enabled)state.content[id]={enabled:!!data.content[id]?.enabled,updatedAt:now};}persist();render();backupInfo();$('backupMessage').textContent=mode==='merge'?'已合併取得進度、收藏與使用者設定。':'已還原備份（舊版備份會保留目前收藏與使用者設定）。';$('importPreview').hidden=true;pendingImport=null;}
 for(const [key,s]of Object.entries(sections)){$('tabs').insertAdjacentHTML('beforeend',`<button data-tab="${key}"><span>${s.icon}</span><span>${s.short}清單</span><small>${s.kicker.split(' ')[0]}</small></button>`);$('stats').insertAdjacentHTML('beforeend',`<button class="stat" data-stat="${key}" aria-label="查看${s.short}清單"><div class="stat-top"><span>${s.short}收集</span><span class="percent">0%</span></div><div class="stat-number"></div><div class="progress"><i></i></div></button>`);}
 $('tabs').insertAdjacentHTML('beforeend','<button data-tab="missions"><span>▤</span><span>關卡清單</span><small>FARMING</small></button>');
 document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>switchSection(b.dataset.tab));document.querySelectorAll('[data-stat]').forEach(b=>b.onclick=()=>switchSection(b.dataset.stat));
@@ -198,3 +199,11 @@ function setupSettings(){
   else if(contentIds.has(e.target.dataset.content))changeContent([e.target.dataset.content],e.target.checked);
  });
 }
+
+// Small integration surface: Google/Drive code stays outside Checklist logic.
+window.EDF_CHECKLIST_STORAGE={
+ get(){mergeLatest();if(storageError)throw Error("本機存檔異常，請先匯出備份並處理儲存問題。");return validate(JSON.parse(JSON.stringify(state))).data;},
+ validate,
+ apply(data,mode){applyImport(validate(data).data,mode,{requireSnapshot:true});if(storageError)throw Error("雲端進度已套用至畫面，但本機儲存失敗。請立即匯出 JSON 備份。");},
+ export:download
+};
