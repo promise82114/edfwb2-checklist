@@ -87,7 +87,7 @@ function persist(){state.updatedAt=Date.now();try{
   if(storageError&&localStorage.getItem(KEY)){const existing=localStorage.getItem(KEY);try{validate(JSON.parse(existing));}catch{localStorage.setItem(KEY+'-damaged-'+Date.now(),existing);}}
   localStorage.setItem(KEY,JSON.stringify(state));storageError='';
   const latest=snapshots()[0];if(!latest||Date.now()-latest.at>10*60*1000)saveSnapshot('自動儲存');
-}catch{storageError='儲存失敗 · 請下載備份';toast('瀏覽器無法儲存，請立即下載進度備份。');}status();}
+}catch{storageError='儲存失敗 · 請下載備份';toast('瀏覽器無法儲存，請立即下載進度備份。');}status();window.dispatchEvent(new Event('edf-progress-change'));}
 function change(items,value){mergeLatest();const changes=items.filter(i=>owned(i)!==value).map(i=>({id:i.id,before:!!state.entries[i.id]?.owned}));if(!changes.length)return;undoStack.push(changes);undoStack=undoStack.slice(-30);const now=Date.now();for(const c of changes)state.entries[c.id]={owned:value,updatedAt:now};persist();render();}
 function renderSettings(){
  for(const o of content.options)$('content-'+o.id).checked=contentEnabled(o.id);
@@ -263,6 +263,24 @@ function setupSettings(){
 window.EDF_CHECKLIST_STORAGE={
  get(){mergeLatest();if(storageError)throw Error("本機存檔異常，請先匯出備份並處理儲存問題。");return validate(JSON.parse(JSON.stringify(state))).data;},
  validate,
+ reconcile(data){
+  data=validate(data).data;mergeLatest();
+  if(storageError)throw Error('本機存檔異常，已停止同步，請先匯出備份。');
+  const changes=[];
+  for(const key of ['entries','favorites','content']){
+   state[key]??={};
+   for(const [id,e] of Object.entries(data[key]||{})){
+    const current=state[key][id];
+    // Preserve explicit false values; equal timestamps keep local state.
+    if(!current||e.updatedAt>current.updatedAt)changes.push({key,id,value:e});
+   }
+  }
+  if(!changes.length)return;
+  if(!saveSnapshot('雲端同步前'))throw Error('無法保留本機快照，已停止同步，請先匯出備份。');
+  for(const c of changes)state[c.key][c.id]={...c.value};
+  persist();render();
+  if(storageError)throw Error('同步進度的本機儲存失敗，請立即匯出備份。');
+ },
  apply(data,mode){applyImport(validate(data).data,mode,{requireSnapshot:true});if(storageError)throw Error("雲端進度已套用至畫面，但本機儲存失敗。請立即匯出 JSON 備份。");},
  export:download
 };

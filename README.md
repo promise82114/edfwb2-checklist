@@ -14,7 +14,7 @@
 
 GitHub Pages 設定：在 repo 的 **Settings → Pages → Build and deployment → Source** 選 **GitHub Actions**，不要選 Deploy from a branch。
 
-`.github/workflows/pages.yml` 會在推送到 `main` 或手動執行 workflow 時，只發布 `dist/` 內容。網站首頁為 https://promise82114.github.io/edfwb2-checklist/ ，網址不包含 `dist`。GitHub Pages 不執行 `server.mjs`，也不會發布測試腳本或工具。
+`.github/workflows/deploy.yml` 會在推送到 `main` 或手動執行 workflow 時，只發布 `dist/` 內容。網站首頁為 https://promise82114.github.io/edfwb2-checklist/ ，網址不包含 `dist`。GitHub Pages 不執行 `server.mjs`，也不會發布測試腳本或工具。
 
 第一次發布需將專案變更 commit 並 push 到 GitHub。後續更新 `dist/` 並推送到 `main`，即可自動部署。由舊本機網址移轉進度時，請先下載 JSON 備份，再到 Pages 網址匯入。
 
@@ -22,7 +22,7 @@ GitHub Pages 設定：在 repo 的 **Settings → Pages → Build and deployment
 
 ## 使用
 
-- 「備份與還原」提供 Google Drive 連接，手動上傳／下載與比較。首次連接不自動覆蓋，套用前可選合併或還原；Token 僅存在記憶體，過期後需按重新授權。原有 JSON 備份仍可使用，並支援匯入雲端格式。設定與共用模組文件見 [Google Drive 同步](docs/google-drive-sync.md)。
+- Header 或「備份與還原」提供 Google Drive 連接。連接後預設自動同步，也可關閉自動同步、手動比較或還原；Token 僅存在記憶體，過期後需按重新授權。原有 JSON 備份仍可使用，並支援匯入雲端格式。設定與共用模組文件見 [Google Drive 同步](docs/google-drive-sync.md)。
 
 - 右上方「使用者設定」依已擁有並導入的內容控制清單，預設皆未勾選。季票為父層，連動 13 個角色選項與 1 個追加任務包選項；可個別選取，部分選取顯示半選。第一區不另設分割標題。沒有啟用對應內容時，隱藏 DLC 武器／角色頁籤與進度卡；取消最後一項相關內容時，切回對應本篇清單。
 - 「額外購買」只有雙葉理保收藏套組（2 名角色、10 項武器）；「特典」分別勾選本田公關官、姬川公關官、空襲支援兵前輩（各 1 名角色、5 項武器）。
@@ -55,7 +55,7 @@ GitHub Pages 設定：在 repo 的 **Settings → Pages → Build and deployment
 
 清單完成率不是遊戲任務達成度或獎盃判定。配件為額外收集項目；DLC/特典獨立標示，不能把完整清單的分母當成獎盃所需數量。資料依 2026-10-10 讀取的 Wiki 整理，可能受原站缺漏影響。角色逐頁核對版本，武器各名稱/等級分列，配件按品質與資料表列出的型別整理。
 
-Google Drive 提供可選的手動雲端進度上傳／下載；未連接仍使用原有本機儲存。手機、電腦、不同瀏覽器或不同網址之間，可透過雲端進度或 JSON 備份移轉。保留相同項目 ID，更新清單不會因排序改變而錯配進度。
+Google Drive 連接後預設自動同步：停止操作 5 秒後同步，每 60 秒、恢復連線與回到頁面時再次檢查；內容一致時不重複上傳。每項取得、收藏及設定以較新的更新時間為準（同時間保留本機），取消操作也會同步。多裝置的時鐘應保持正確。雲端版本衝突會重新讀取並重試，無法驗證的資料會暫停同步。本機套用雲端變更前會保留快照。授權僅保留在頁面記憶體，過期或重新整理後需按一下重新連接；未連接仍使用原有本機儲存。手機、電腦、不同瀏覽器或不同網址之間，可透過雲端進度或 JSON 備份移轉。保留相同項目 ID，更新清單不會因排序改變而錯配進度。
 
 資料來源：https://w.atwiki.jp/edfwb2/ 。只整理名稱、分類、版本等事實資料，未轉載攻略解說及圖片。每列附原始攻略連結。
 

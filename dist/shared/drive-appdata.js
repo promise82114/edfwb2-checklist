@@ -10,7 +10,7 @@
     const response=await fetch(url,{...options,cache:'no-store',signal:controller.signal,headers:{...options.headers,Authorization:'Bearer '+token}});
     if(response.status===401){this.auth.invalidate();throw new DriveError('Google 授權已失效，請重新授權。','expired');}
     if(response.status===412)throw new DriveError('雲端進度已變更，請重新下載比較後再操作。','conflict');
-    if(!response.ok)throw new DriveError(response.status===403?'Drive 拒絕存取，請確認授權權限及 Drive API 設定。':response.status===429?'Drive 請求過於頻繁，請稍後重試。':`Drive 請求失敗（${response.status}），本機進度仍保留。`);
+    if(!response.ok)throw new DriveError(response.status===403?'Drive 拒絕存取，請確認授權權限及 Drive API 設定。':response.status===429?'Drive 請求過於頻繁，請稍後重試。':`Drive 請求失敗（${response.status}），本機進度仍保留。`,response.status===403?'permission':'drive');
     // Read the body before clearing the timeout; stalled downloads also time out.
     return {text:await response.text(),etag:response.headers.get('ETag')};
    }catch(e){if(e.code)throw e;throw new DriveError(e.name==='AbortError'?'Drive 請求逾時，請重新下載確認雲端狀態。':'無法連接 Drive，請確認網路後重試。');}finally{clearTimeout(timer);}
@@ -44,6 +44,7 @@
    if(expected?(!current||current.id!==expected.file.id||current.version!==expected.file.version):!!current)throw new DriveError('雲端進度已變更，請重新下載比較後再操作。','conflict');
    const body=JSON.stringify(value);
    if(current){
+    if(!expected.etag)throw new DriveError('無法取得雲端版本保護資訊，已暫停同步以避免覆蓋。','invalid');
     await this.request('https://www.googleapis.com/upload/drive/v3/files/'+encodeURIComponent(current.id)+'?uploadType=media',{method:'PATCH',headers:{'Content-Type':'application/json',...(expected.etag?{'If-Match':expected.etag}:{})},body});
    }else{
     const boundary='sideproject_'+crypto.randomUUID().replaceAll('-','');

@@ -8,7 +8,7 @@ try{
  const context=await browser.newContext({viewport:{width:1366,height:900},serviceWorkers:'block'}),page=await context.newPage(),errors=[];
  page.on('pageerror',e=>errors.push(e.message));
  await context.route('https://accounts.google.com/gsi/client',route=>route.fulfill({contentType:'application/javascript',body:`window.mockGoogle={calls:0,lifetime:3600,error:null};window.google={accounts:{oauth2:{hasGrantedAllScopes:r=>!r.denied,initTokenClient:options=>{window.mockGoogle.options=options;return {requestAccessToken:request=>{window.mockGoogle.calls++;setTimeout(()=>{if(window.mockGoogle.error){options.error_callback({type:window.mockGoogle.error});return;}options.callback({access_token:'mock-token-'+window.mockGoogle.calls,expires_in:window.mockGoogle.lifetime,scope:options.scope,denied:window.mockGoogle.denied});},0);}};}}}};`}));
- let cloud=null,version=1,fail=0,duplicate=false,writes=0;
+ let cloud=null,version=1,fail=0,duplicate=false,writes=0,collisionOnWrite=false,missingEtag=false;
  const metadata=()=>({id:'file-edf',name:'edfwb2-checklist.json',version:String(version),size:String(JSON.stringify(cloud).length)});
  await context.route('https://www.googleapis.com/**',async route=>{
   const req=route.request(),u=new URL(req.url());assert.match(req.headers().authorization||'',/^Bearer mock-token-/);
@@ -18,7 +18,7 @@ try{
     assert.equal(u.searchParams.get('q'),"name = 'edfwb2-checklist.json' and trashed = false");
     await route.fulfill({json:{files:cloud?(duplicate?[metadata(),{...metadata(),id:'duplicate'}]:[metadata()]):[]}});return;
    }
-   if(u.searchParams.get('alt')==='media'){await route.fulfill({json:cloud,headers:{ETag:'"version-'+version+'"','Access-Control-Expose-Headers':'ETag'}});return;}
+   if(u.searchParams.get('alt')==='media'){await route.fulfill({json:cloud,headers:missingEtag?{}:{ETag:'"version-'+version+'"','Access-Control-Expose-Headers':'ETag'}});return;}
    await route.fulfill({json:metadata()});return;
   }
   if(req.method()==='POST'){
@@ -26,51 +26,79 @@ try{
    cloud=JSON.parse(body.split('\r\n\r\n')[2].split('\r\n--')[0]);version++;writes++;await route.fulfill({json:metadata()});return;
   }
   if(req.method()==='PATCH'){
+   if(collisionOnWrite){collisionOnWrite=false;cloud.data.favorites.M01={favorite:true,updatedAt:Date.now()};version++;await route.fulfill({status:412,json:{error:'concurrent update'}});return;}
    assert.equal(req.headers()['if-match'],'"version-'+version+'"');cloud=JSON.parse(req.postData());version++;writes++;await route.fulfill({json:metadata()});return;
   }
   throw Error('Unexpected request');
  });
- await page.goto(process.env.TEST_URL||'http://127.0.0.1:4174');const base=await page.evaluate(()=>JSON.parse(JSON.stringify(state))),itemId=await page.locator('#list input').first().getAttribute('data-id');
- await page.locator('#list [data-id="'+itemId+'"]').click();const before=await page.evaluate(()=>localStorage.getItem('edfwb2-progress-v1'));
- await page.locator('#backupOpen').click();await page.locator('#cloudOpen').click();
- await page.waitForFunction(()=>document.getElementById('cloudStatus').textContent.includes('已就緒'));
- await page.locator('#cloudConnect').click();await page.waitForFunction(()=>document.getElementById('cloudStatus').textContent.includes('雲端尚無'));
- assert.equal(writes,0);assert.equal(await page.evaluate(()=>localStorage.getItem('edfwb2-progress-v1')),before);
- assert.equal(await page.evaluate(()=>mockGoogle.options.client_id),'260923931716-cevi1vcfrfoibmn3i2fdpsn1epg7hr3g.apps.googleusercontent.com');assert.equal(await page.evaluate(()=>mockGoogle.options.scope),'https://www.googleapis.com/auth/drive.appdata');
- await page.locator('#cloudUpload').click();await page.waitForFunction(()=>document.getElementById('cloudStatus').textContent.includes('已上傳'));
- assert.equal(writes,1);assert.equal(cloud.schemaVersion,1);assert.equal(cloud.projectId,'edfwb2-checklist');assert.equal(cloud.data.entries[itemId].owned,true);assert.ok(Number.isFinite(Date.parse(cloud.updatedAt)));
- const otherId=await page.evaluate(()=>catalog.items.filter(i=>i.kind==='weapons'&&!i.extra)[1].id);
- cloud={schemaVersion:1,projectId:'edfwb2-checklist',updatedAt:'2026-10-13T01:00:00Z',data:{...base,entries:{[otherId]:{owned:true,updatedAt:Date.now()}},content:{riho:{enabled:true,updatedAt:Date.now()}},favorites:{M01:{favorite:true,updatedAt:Date.now()}}}};version++;
- await page.locator('#cloudDisconnect').click();await page.locator('#cloudConnect').click();await page.waitForFunction(()=>!document.getElementById('cloudChoices').hidden);
- assert.equal(writes,1);assert.equal(await page.evaluate(()=>localStorage.getItem('edfwb2-progress-v1')),before);
- await page.locator('#cloudRead').click();await page.waitForFunction(()=>!document.getElementById('cloudRead').disabled);assert.equal(await page.evaluate(()=>localStorage.getItem('edfwb2-progress-v1')),before);
- await page.locator('#cloudMerge').click();await page.waitForFunction(()=>document.getElementById('cloudStatus').textContent.includes('合併至本機'));
- assert.equal(await page.evaluate(id=>state.entries[id].owned,itemId),true);assert.equal(await page.evaluate(id=>state.entries[id].owned,otherId),true);assert.equal(writes,1);
- const merged=await page.evaluate(()=>localStorage.getItem('edfwb2-progress-v1'));version++;
- page.once('dialog',d=>d.accept());await page.locator('#cloudUpload').click();await page.waitForFunction(()=>document.getElementById('cloudStatus').textContent.includes('雲端進度已變更'));
- assert.equal(writes,1);assert.equal(await page.evaluate(()=>localStorage.getItem('edfwb2-progress-v1')),merged);
- await page.locator('#cloudRead').click();await page.waitForFunction(()=>!document.getElementById('cloudChoices').hidden);
- page.once('dialog',d=>d.dismiss());await page.locator('#cloudReplace').click();await page.waitForFunction(()=>!document.getElementById('cloudReplace').disabled);assert.equal(await page.evaluate(()=>localStorage.getItem('edfwb2-progress-v1')),merged);
- page.once('dialog',d=>d.accept());await page.locator('#cloudReplace').click();await page.waitForFunction(()=>document.getElementById('cloudStatus').textContent.includes('還原至本機'));
- assert.equal(await page.evaluate(id=>state.entries[id].owned,itemId),false);assert.ok(await page.evaluate(()=>snapshots().some(s=>s.label==='匯入前')));
- // Explicit upload updates an existing file, not a duplicate.
- page.once('dialog',d=>d.accept());await page.locator('#cloudUpload').click();await page.waitForFunction(()=>document.getElementById('cloudStatus').textContent.includes('已上傳'));assert.equal(writes,2);
- const dl=page.waitForEvent('download');await page.locator('#cloudExport').click();const exported=JSON.parse(await fs.readFile(await (await dl).path(),'utf8'));assert.equal(exported.projectId,'edfwb2-checklist');
- await page.locator('#cloudDialog .close').click();await page.locator('#backupDialog .close').click();await page.locator('#undo').click();assert.equal(await page.evaluate(id=>state.entries[id].owned,itemId),true);
- await page.locator('#backupOpen').click();await page.locator('#importFile').setInputFiles({name:'cloud.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(exported))});await page.locator('#importPreview').waitFor({state:'visible'});await page.locator('#cloudOpen').click();
- const safe=await page.evaluate(()=>localStorage.getItem('edfwb2-progress-v1'));
- for(const status of [403,429,500]){fail=status;await page.locator('#cloudRead').click();await page.waitForFunction(()=>!document.getElementById('cloudRead').disabled);assert.equal(await page.evaluate(()=>localStorage.getItem('edfwb2-progress-v1')),safe);assert.equal(await page.locator('#cloudUpload').isEnabled(),false);}
- const validCloud=cloud;
- for(const bad of [{...validCloud,projectId:'other-game'},{...validCloud,schemaVersion:99},{...validCloud,data:{...validCloud.data,entries:[]}}]){cloud=bad;version++;await page.locator('#cloudRead').click();await page.waitForFunction(()=>!document.getElementById('cloudRead').disabled);assert.equal(await page.evaluate(()=>localStorage.getItem('edfwb2-progress-v1')),safe);assert.equal(await page.locator('#cloudUpload').isEnabled(),false);}
- cloud=validCloud;version++;duplicate=true;await page.locator('#cloudRead').click();await page.waitForFunction(()=>document.getElementById('cloudStatus').textContent.includes('多份'));duplicate=false;
- fail=401;await page.locator('#cloudRead').click();await page.waitForFunction(()=>document.getElementById('cloudConnect').textContent.includes('重新授權'));assert.equal(await page.locator('#cloudRead').isEnabled(),false);assert.equal(await page.evaluate(()=>mockGoogle.calls),2);
- await page.locator('#cloudConnect').click();await page.waitForFunction(()=>!document.getElementById('cloudChoices').hidden);assert.equal(await page.evaluate(()=>mockGoogle.calls),3);
- fail=500;page.once('dialog',d=>d.accept());await page.locator('#cloudUpload').click();await page.waitForFunction(()=>!document.getElementById('cloudConnect').disabled);assert.equal(writes,2);assert.equal(await page.evaluate(()=>localStorage.getItem('edfwb2-progress-v1')),safe);
- await page.locator('#cloudDisconnect').click();await page.evaluate(()=>mockGoogle.lifetime=1);await page.locator('#cloudConnect').click();await page.waitForFunction(()=>document.getElementById('cloudConnect').textContent.includes('重新授權'));
+ await page.clock.install();
+ await page.goto(process.env.TEST_URL||'http://127.0.0.1:4174');
+ const ids=await page.evaluate(()=>catalog.items.filter(i=>i.kind==='weapons'&&!i.extra).slice(0,3).map(i=>i.id));
+ const edit=async(id,value)=>page.evaluate(({id,value})=>change([catalog.items.find(i=>i.id===id)],value),{id,value});
+ const settled=()=>page.waitForFunction(()=>!document.getElementById('cloudConnect').disabled);
+ const synced=()=>page.waitForFunction(()=>document.getElementById('cloudQuick').textContent.startsWith('雲端已同步'));
+ await edit(ids[0],true);
+ await page.locator('#cloudQuick').click();await page.waitForFunction(()=>document.getElementById('cloudStatus').textContent.includes('已就緒'));
+ await page.locator('#cloudConnect').click();await synced();
+ assert.equal(writes,1);assert.equal(cloud.data.entries[ids[0]].owned,true);
+ assert.equal(await page.evaluate(()=>mockGoogle.options.scope),'https://www.googleapis.com/auth/drive.appdata');
+ // Burst edits debounce; explicit false is uploaded too.
+ await edit(ids[1],true);await edit(ids[0],false);
+ assert.equal(writes,1);assert.match(await page.locator('#cloudQuick').textContent(),/待同步/);
+ await synced();assert.equal(writes,2);assert.equal(cloud.data.entries[ids[0]].owned,false);assert.equal(cloud.data.entries[ids[1]].owned,true);
+ await page.locator('#cloudUpload').click();await synced();assert.equal(writes,2,'unchanged content does not upload');
+ // Another device's newer cancellation and acquisition are pulled, preserving local edits.
+ cloud.data.entries[ids[1]]={owned:false,updatedAt:Date.now()+1000};cloud.data.entries[ids[2]]={owned:true,updatedAt:Date.now()+1000};version++;
+ await page.locator('#cloudUpload').click();await synced();
+ assert.equal(await page.evaluate(id=>state.entries[id].owned,ids[1]),false);assert.equal(await page.evaluate(id=>state.entries[id].owned,ids[2]),true);assert.equal(writes,2);
+ assert.ok(await page.evaluate(()=>snapshots().some(s=>s.label==='雲端同步前')));
+ // ETag conflict retries with a fresh download, keeping both devices' changes.
+ await edit(ids[0],true);fail=412;await page.locator('#cloudUpload').click();await synced();assert.equal(writes,3);
+ // Offline local changes survive and are flushed on reconnection.
+ await context.setOffline(true);await edit(ids[0],false);await page.waitForTimeout(5500);assert.equal(writes,3);
+ await context.setOffline(false);await synced();assert.equal(writes,4);assert.equal(cloud.data.entries[ids[0]].owned,false);
+ // Auto-off cancels the pending debounce; explicit sync still works.
+ await page.locator('#cloudAuto').uncheck();await edit(ids[0],true);await page.waitForTimeout(5500);assert.equal(writes,4);
+ await page.locator('#cloudUpload').click();await settled();assert.equal(writes,5);
+ await page.locator('#cloudAuto').check();await synced();
+ // API errors retain dirty state; online retry succeeds without another grant.
+ await edit(ids[0],false);fail=500;await page.locator('#cloudUpload').click();await settled();assert.equal(writes,5);assert.match(await page.locator('#cloudQuick').textContent(),/待重試/);
+ await page.evaluate(()=>window.dispatchEvent(new Event('online')));await synced();assert.equal(writes,6);
+ // Wrong project and duplicates stop automatic writes.
+ const valid=structuredClone(cloud);cloud={...cloud,projectId:'other-game'};version++;
+ await page.locator('#cloudUpload').click();await settled();assert.match(await page.locator('#cloudQuick').textContent(),/暫停/);assert.equal(writes,6);
+ cloud=valid;version++;duplicate=true;await page.locator('#cloudUpload').click();await settled();assert.match(await page.locator('#cloudStatus').textContent(),/多份/);assert.equal(writes,6);
+ duplicate=false;await page.locator('#cloudUpload').click();await synced();
+ // 401/expiry requires a click, never opens a popup automatically.
+ fail=401;await page.locator('#cloudUpload').click();await settled();assert.match(await page.locator('#cloudQuick').textContent(),/重新授權/);assert.equal(await page.evaluate(()=>mockGoogle.calls),1);
+ await page.locator('#cloudConnect').click();await synced();assert.equal(await page.evaluate(()=>mockGoogle.calls),2);
+ await page.locator('#cloudDisconnect').click();await edit(ids[0],true);await page.waitForTimeout(5500);assert.equal(writes,6);
+ await page.evaluate(()=>mockGoogle.lifetime=1);await page.locator('#cloudConnect').click();await page.waitForFunction(()=>document.getElementById('cloudQuick').textContent.includes('重新授權'));
  assert.equal(await page.evaluate(()=>Object.values(localStorage).some(v=>v.includes('mock-token-'))),false);
- await page.evaluate(()=>{mockGoogle.lifetime=3600;mockGoogle.error='popup_closed';});await page.locator('#cloudConnect').click();await page.waitForFunction(()=>document.getElementById('cloudStatus').textContent.includes('視窗已關閉'));
- await page.evaluate(()=>{mockGoogle.error=null;mockGoogle.denied=true;});await page.locator('#cloudConnect').click();await page.waitForFunction(()=>document.getElementById('cloudStatus').textContent.includes('未授予'));
- await page.setViewportSize({width:390,height:844});await page.screenshot({path:'outputs/cloud-mobile.png'});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);assert.equal(await page.locator('#cloudDialog').evaluate(e=>e.scrollWidth<=e.clientWidth),true);
- assert.deepEqual(errors,[]);console.log('PASS: GIS scope, memory-only tokens, create/update, explicit conflict choices, version conflicts, merge/replace/cancel/undo, envelope backup, invalid/cross-project data, duplicates, API failures, 401/expiry/reauthorization, popup/scope denial, mobile');
+ await page.evaluate(()=>{mockGoogle.lifetime=3600;mockGoogle.error='popup_closed';});await page.locator('#cloudConnect').click();await settled();assert.match(await page.locator('#cloudStatus').textContent(),/視窗已關閉/);
+ await page.evaluate(()=>{mockGoogle.error=null;mockGoogle.denied=true;});await page.locator('#cloudConnect').click();await settled();assert.match(await page.locator('#cloudStatus').textContent(),/未授予/);
+ // Verify the 60-second poll without waiting a real minute.
+ await page.evaluate(()=>mockGoogle.denied=false);await page.locator('#cloudConnect').click();await synced();
+ cloud.data.entries[ids[0]]={owned:false,updatedAt:Date.now()+10000};version++;
+ await page.clock.fastForward(60000);await page.waitForFunction(id=>state.entries[id].owned===false,ids[0]);await synced();
+ // A real conditional write conflict preserves the other device's favorite.
+ const priorWrites=writes;collisionOnWrite=true;await edit(ids[1],true);await page.locator('#cloudUpload').click();await synced();
+ assert.equal(writes,priorWrites+1);assert.equal(cloud.data.favorites.M01.favorite,true);assert.equal(await page.evaluate(()=>state.favorites.M01.favorite),true);
+ // Missing ETag and permission denial fail closed, leaving edits locally.
+ missingEtag=true;await edit(ids[1],false);await page.locator('#cloudUpload').click();await settled();assert.equal(writes,priorWrites+1);assert.match(await page.locator('#cloudQuick').textContent(),/暫停/);
+ missingEtag=false;fail=403;await page.locator('#cloudUpload').click();await settled();assert.equal(writes,priorWrites+1);assert.match(await page.locator('#cloudQuick').textContent(),/暫停/);
+ await page.locator('#cloudUpload').click();await synced();assert.equal(writes,priorWrites+2);assert.equal(cloud.data.entries[ids[1]].owned,false);
+ // Manual restore still confirms, snapshots, and supports undo.
+ await page.locator('#cloudAuto').uncheck();await edit(ids[0],true);await page.locator('#cloudRead').click();await settled();
+ page.once('dialog',d=>d.dismiss());await page.locator('#cloudReplace').click();await settled();assert.equal(await page.evaluate(id=>state.entries[id].owned,ids[0]),true);
+ page.once('dialog',d=>d.accept());await page.locator('#cloudReplace').click();await settled();assert.equal(await page.evaluate(id=>state.entries[id].owned,ids[0]),false);
+ await page.locator('#cloudDialog .close').click();await page.locator('#undo').click();assert.equal(await page.evaluate(id=>state.entries[id].owned,ids[0]),true);
+ await page.locator('#cloudQuick').click();await page.locator('#cloudAuto').check();await synced();
+ const dl=page.waitForEvent('download');await page.locator('#cloudExport').click();const exported=JSON.parse(await fs.readFile(await (await dl).path(),'utf8'));assert.equal(exported.projectId,'edfwb2-checklist');
+ await page.setViewportSize({width:390,height:844});await page.screenshot({path:'outputs/cloud-mobile.png'});
+ assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);assert.equal(await page.locator('#cloudDialog').evaluate(e=>e.scrollWidth<=e.clientWidth),true);
+ await page.locator('#cloudDialog .close').click();assert.equal(await page.locator('#cloudQuick').isVisible(),true);await page.screenshot({path:'outputs/cloud-header-mobile.png'});
+ await page.setViewportSize({width:1366,height:900});await page.screenshot({path:'outputs/cloud-header-desktop.png'});
+ assert.deepEqual(errors,[]);console.log('PASS: auto-connect sync, 5s debounce, cancellations, newest-item merge, snapshots, ETag retry, offline/online, auto-off/manual sync, unchanged no-upload, failures, invalid data, duplicate files, expiry/reauthorization, token isolation, 60s polling, export, mobile/header');
  await context.close();
 }finally{await browser.close();}
