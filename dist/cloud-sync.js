@@ -6,6 +6,8 @@
  let session=0,timer,lastSync=0,synced=null,paused=false,problem='',syncing=false;
  const auth=new global.SideProjectAuth.GoogleAuth(config.clientId,()=>{
   if(!auth.connected&&connectedBefore){expired=true;reviewed=false;remote=null;clearTimeout(timer);}
+  if(connectedBefore&&auth.info.reason==='expired')message('Google 授權期限已到，請重新授權；未同步變更仍保留在本機。');
+  if(connectedBefore&&auth.info.reason==='rejected')message('Google 提前拒絕目前授權（401），請重新授權；本機進度仍保留。');
   render();
  });
  const drive=new global.SideProjectDrive.DriveAppData(auth,config.fileName);
@@ -14,6 +16,11 @@
  function dirty(){try{return fingerprint(local.get())!==synced;}catch{return true;}}
  function message(text){$('cloudStatus').textContent=text;}
  function render(){
+  const info=auth.info,time=value=>new Date(value).toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  $('cloudAuthStatus').textContent=auth.connected?`本次授權 ${info.lifetimeSeconds} 秒，於 ${time(info.issuedAt)} 取得，${time(info.expiresAt)} 到期。`:
+   info.reason==='rejected'?`Google 拒絕授權（401）；原定 ${time(info.expiresAt)} 到期。請重新授權。`:
+   info.reason==='expired'&&info.expiresAt?`授權已於 ${time(info.expiresAt)} 到期（本次 ${info.lifetimeSeconds} 秒）。請重新授權。`:
+   '授權只保留在此頁面；重新整理或重開後需再次連接。';
   if(!reviewed)$('cloudRemoteSummary').textContent='尚未讀取';
   $('cloudConnect').disabled=busy;
   $('cloudConnect').textContent=busy?'處理中…':!ready?'載入 Google 授權服務':expired?'重新授權 Google Drive':auth.connected?'切換 Google 帳號':'連接 Google Drive';
@@ -55,7 +62,13 @@
      try{
       await read(expectedSession);checkSession(expectedSession);if(remote)local.reconcile(remote.data);
       const data=local.get(),signature=fingerprint(data);
-      if(!remote||signature!==fingerprint(remote.data)){const expected=remote;reviewed=false;remote=null;checkSession(expectedSession);await drive.write(global.SideProjectProgress.pack(config.projectId,data),expected);checkSession(expectedSession);}
+      if(!remote||signature!==fingerprint(remote.data)){
+       const expected=remote;reviewed=false;remote=null;checkSession(expectedSession);
+       await drive.write(global.SideProjectProgress.pack(config.projectId,data),expected);checkSession(expectedSession);
+       // Verify the actual stored content, including when ETag is unavailable.
+       await read(expectedSession);
+       if(!remote||signature!==fingerprint(remote.data))throw Object.assign(Error('寫入後雲端進度有變更，將重新合併同步。'),{code:'conflict'});
+      }
       synced=signature;lastSync=Date.now();paused=false;problem='';$('cloudLocalSummary').textContent=summarize(local.get());message('已同步至 Google Drive。'+(dirty()?'仍有新變更等待同步。':''));return;
      }catch(e){if(e.code!=='conflict'||attempt===2)throw e;}
     }
@@ -68,9 +81,9 @@
  $('cloudOpen').onclick=open;$('cloudQuick').onclick=open;
  $('cloudConnect').onclick=()=>{
   if(!ready){prepare();return;}
-  const expectedSession=++session;clearTimeout(timer);synced=null;lastSync=0;paused=false;problem='';
+  const selectAccount=!expired,expectedSession=++session;clearTimeout(timer);synced=null;lastSync=0;paused=false;problem='';
   // Authorization starts directly in this click handler for popup activation.
-  run(async()=>{remote=null;reviewed=false;expired=false;await auth.connect();checkSession(expectedSession);expired=false;connectedBefore=true;await read(expectedSession);message('已連接 Google Drive。');}).then(()=>{if(expectedSession===session&&auth.connected&&automatic()&&!paused)sync();});
+  run(async()=>{remote=null;reviewed=false;expired=false;await auth.connect({selectAccount});checkSession(expectedSession);expired=false;connectedBefore=true;await read(expectedSession);message('已連接 Google Drive。');}).then(()=>{if(expectedSession===session&&auth.connected&&automatic()&&!paused)sync();});
  };
  $('cloudDisconnect').onclick=()=>{session++;clearTimeout(timer);connectedBefore=false;auth.disconnect();remote=null;reviewed=false;expired=false;synced=null;lastSync=0;problem='';paused=false;message('已中斷連接，本機與雲端進度都保留。');render();};
  $('cloudAuto').onchange=()=>{paused=false;problem='';if(automatic())sync();else{clearTimeout(timer);render();}};

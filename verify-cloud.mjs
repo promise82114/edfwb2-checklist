@@ -7,7 +7,7 @@ const browser=await chromium.launch({headless:true,channel:'msedge'});
 try{
  const context=await browser.newContext({viewport:{width:1366,height:900},serviceWorkers:'block'}),page=await context.newPage(),errors=[];
  page.on('pageerror',e=>errors.push(e.message));
- await context.route('https://accounts.google.com/gsi/client',route=>route.fulfill({contentType:'application/javascript',body:`window.mockGoogle={calls:0,lifetime:3600,error:null};window.google={accounts:{oauth2:{hasGrantedAllScopes:r=>!r.denied,initTokenClient:options=>{window.mockGoogle.options=options;return {requestAccessToken:request=>{window.mockGoogle.calls++;setTimeout(()=>{if(window.mockGoogle.error){options.error_callback({type:window.mockGoogle.error});return;}options.callback({access_token:'mock-token-'+window.mockGoogle.calls,expires_in:window.mockGoogle.lifetime,scope:options.scope,denied:window.mockGoogle.denied});},0);}};}}}};`}));
+ await context.route('https://accounts.google.com/gsi/client',route=>route.fulfill({contentType:'application/javascript',body:`window.mockGoogle={calls:0,lifetime:3600,error:null};window.google={accounts:{oauth2:{hasGrantedAllScopes:r=>!r.denied,initTokenClient:options=>{window.mockGoogle.options=options;return {requestAccessToken:request=>{window.mockGoogle.calls++;window.mockGoogle.request=request;setTimeout(()=>{if(window.mockGoogle.error){options.error_callback({type:window.mockGoogle.error});return;}options.callback({access_token:'mock-token-'+window.mockGoogle.calls,expires_in:window.mockGoogle.lifetime,scope:options.scope,denied:window.mockGoogle.denied});},0);}};}}}};`}));
  let cloud=null,version=1,fail=0,duplicate=false,writes=0,collisionOnWrite=false,missingEtag=false;
  const metadata=()=>({id:'file-edf',name:'edfwb2-checklist.json',version:String(version),size:String(JSON.stringify(cloud).length)});
  await context.route('https://www.googleapis.com/**',async route=>{
@@ -27,7 +27,7 @@ try{
   }
   if(req.method()==='PATCH'){
    if(collisionOnWrite){collisionOnWrite=false;cloud.data.favorites.M01={favorite:true,updatedAt:Date.now()};version++;await route.fulfill({status:412,json:{error:'concurrent update'}});return;}
-   assert.equal(req.headers()['if-match'],'"version-'+version+'"');cloud=JSON.parse(req.postData());version++;writes++;await route.fulfill({json:metadata()});return;
+   assert.equal(req.headers()['if-match'],missingEtag?undefined:'"version-'+version+'"');cloud=JSON.parse(req.postData());version++;writes++;await route.fulfill({json:metadata()});return;
   }
   throw Error('Unexpected request');
  });
@@ -40,7 +40,7 @@ try{
  await edit(ids[0],true);
  await page.locator('#cloudQuick').click();await page.waitForFunction(()=>document.getElementById('cloudStatus').textContent.includes('已就緒'));
  await page.locator('#cloudConnect').click();await synced();
- assert.equal(writes,1);assert.equal(cloud.data.entries[ids[0]].owned,true);
+ assert.equal(writes,1);assert.equal(cloud.data.entries[ids[0]].owned,true);assert.match(await page.locator('#cloudAuthStatus').textContent(),/3600 秒/);
  assert.equal(await page.evaluate(()=>mockGoogle.options.scope),'https://www.googleapis.com/auth/drive.appdata');
  // Burst edits debounce; explicit false is uploaded too.
  await edit(ids[1],true);await edit(ids[0],false);
@@ -70,11 +70,11 @@ try{
  cloud=valid;version++;duplicate=true;await page.locator('#cloudUpload').click();await settled();assert.match(await page.locator('#cloudStatus').textContent(),/多份/);assert.equal(writes,6);
  duplicate=false;await page.locator('#cloudUpload').click();await synced();
  // 401/expiry requires a click, never opens a popup automatically.
- fail=401;await page.locator('#cloudUpload').click();await settled();assert.match(await page.locator('#cloudQuick').textContent(),/重新授權/);assert.equal(await page.evaluate(()=>mockGoogle.calls),1);
- await page.locator('#cloudConnect').click();await synced();assert.equal(await page.evaluate(()=>mockGoogle.calls),2);
+ fail=401;await page.locator('#cloudUpload').click();await settled();assert.match(await page.locator('#cloudQuick').textContent(),/重新授權/);assert.equal(await page.evaluate(()=>mockGoogle.calls),1);assert.match(await page.locator('#cloudAuthStatus').textContent(),/401/);
+ await page.locator('#cloudConnect').click();await synced();assert.equal(await page.evaluate(()=>mockGoogle.calls),2);assert.equal(await page.evaluate(()=>mockGoogle.request.prompt),'');
  await page.locator('#cloudDisconnect').click();await edit(ids[0],true);await page.waitForTimeout(5500);assert.equal(writes,6);
  await page.evaluate(()=>mockGoogle.lifetime=1);await page.locator('#cloudConnect').click();await page.waitForFunction(()=>document.getElementById('cloudQuick').textContent.includes('重新授權'));
- assert.equal(await page.evaluate(()=>Object.values(localStorage).some(v=>v.includes('mock-token-'))),false);
+ assert.match(await page.locator('#cloudAuthStatus').textContent(),/本次 1 秒/);assert.equal(await page.evaluate(()=>Object.values(localStorage).some(v=>v.includes('mock-token-'))),false);
  await page.evaluate(()=>{mockGoogle.lifetime=3600;mockGoogle.error='popup_closed';});await page.locator('#cloudConnect').click();await settled();assert.match(await page.locator('#cloudStatus').textContent(),/視窗已關閉/);
  await page.evaluate(()=>{mockGoogle.error=null;mockGoogle.denied=true;});await page.locator('#cloudConnect').click();await settled();assert.match(await page.locator('#cloudStatus').textContent(),/未授予/);
  // Verify the 60-second poll without waiting a real minute.
@@ -84,9 +84,9 @@ try{
  // A real conditional write conflict preserves the other device's favorite.
  const priorWrites=writes;collisionOnWrite=true;await edit(ids[1],true);await page.locator('#cloudUpload').click();await synced();
  assert.equal(writes,priorWrites+1);assert.equal(cloud.data.favorites.M01.favorite,true);assert.equal(await page.evaluate(()=>state.favorites.M01.favorite),true);
- // Missing ETag and permission denial fail closed, leaving edits locally.
- missingEtag=true;await edit(ids[1],false);await page.locator('#cloudUpload').click();await settled();assert.equal(writes,priorWrites+1);assert.match(await page.locator('#cloudQuick').textContent(),/暫停/);
- missingEtag=false;fail=403;await page.locator('#cloudUpload').click();await settled();assert.equal(writes,priorWrites+1);assert.match(await page.locator('#cloudQuick').textContent(),/暫停/);
+ // Missing browser-visible ETag remains usable; permission denial still stops writes.
+ missingEtag=true;await edit(ids[1],false);await page.locator('#cloudUpload').click();await synced();assert.equal(writes,priorWrites+2);assert.equal(cloud.data.entries[ids[1]].owned,false);
+ missingEtag=false;fail=403;await page.locator('#cloudUpload').click();await settled();assert.equal(writes,priorWrites+2);assert.match(await page.locator('#cloudQuick').textContent(),/暫停/);
  await page.locator('#cloudUpload').click();await synced();assert.equal(writes,priorWrites+2);assert.equal(cloud.data.entries[ids[1]].owned,false);
  // Manual restore still confirms, snapshots, and supports undo.
  await page.locator('#cloudAuto').uncheck();await edit(ids[0],true);await page.locator('#cloudRead').click();await settled();
