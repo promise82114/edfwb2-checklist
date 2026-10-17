@@ -12,7 +12,7 @@
  });
  const drive=new global.SideProjectDrive.DriveAppData(auth,config.fileName);
  const automatic=()=>$('cloudAuto').checked;
- function fingerprint(data){return JSON.stringify(['entries','favorites','content'].map(key=>Object.entries(data[key]||{}).sort(([a],[b])=>a.localeCompare(b))));}
+ function fingerprint(data){return JSON.stringify(['entries','favorites','content','missionNotes'].map(key=>Object.entries(data[key]||{}).sort(([a],[b])=>a.localeCompare(b))));}
  function dirty(){try{return fingerprint(local.get())!==synced;}catch{return true;}}
  function message(text){$('cloudStatus').textContent=text;}
  function render(){
@@ -33,7 +33,7 @@
   $('cloudQuick').textContent=text;$('cloudQuick').classList.toggle('error',expired||paused||!!problem);$('cloudQuick').title=problem||'查看 Google Drive 同步狀態';
  }
  function schedule(delay=5000){clearTimeout(timer);render();if(automatic()&&auth.connected&&!paused)timer=setTimeout(()=>sync(),delay);}
- function summarize(data){const count=(key,field)=>Object.values(data[key]||{}).filter(e=>e[field]).length;return `${count('entries','owned')} 項已取得 · ${count('favorites','favorite')} 關收藏 · ${count('content','enabled')} 項額外內容`;}
+ function summarize(data){const count=(key,field)=>Object.values(data[key]||{}).filter(e=>e[field]).length;return `${count('entries','owned')} 項已取得 · ${count('favorites','favorite')} 關收藏 · ${count('content','enabled')} 項額外內容 · ${count('missionNotes','text')} 則筆記`;}
  function showReview(){ $('cloudLocalSummary').textContent=summarize(local.get());$('cloudRemoteSummary').textContent=remote?summarize(remote.data)+' · '+new Date(remote.value.updatedAt).toLocaleString('zh-TW'):'尚無雲端進度';}
  function checkSession(expected){if(expected!==session||!auth.connected)throw Object.assign(Error('連接已變更，本次操作已停止。'),{code:'cancelled'});}
  async function read(expected=session){

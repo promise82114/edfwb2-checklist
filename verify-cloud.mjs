@@ -94,6 +94,13 @@ try{
  page.once('dialog',d=>d.accept());await page.locator('#cloudReplace').click();await settled();assert.equal(await page.evaluate(id=>state.entries[id].owned,ids[0]),false);
  await page.locator('#cloudDialog .close').click();await page.locator('#undo').click();assert.equal(await page.evaluate(id=>state.entries[id].owned,ids[0]),true);
  await page.locator('#cloudQuick').click();await page.locator('#cloudAuto').check();await synced();
+ // A notes-only edit changes the sync fingerprint; clearing on another device also propagates.
+ const beforeNotes=writes;
+ await page.locator('#cloudDialog .close').click();await page.locator('[data-tab="missions"]').click();await page.locator('[data-mission-tab="favorites"]').click();
+ await page.locator('[data-mission-note="M01"]').fill('雲端測試筆記');
+ await page.locator('#cloudQuick').click();await page.locator('#cloudUpload').click();await synced();assert.equal(writes,beforeNotes+1);assert.equal(cloud.data.missionNotes.M01.text,'雲端測試筆記');
+ cloud.data.missionNotes.M01={text:'',updatedAt:await page.evaluate(()=>Date.now()+10000)};version++;
+ await page.locator('#cloudUpload').click();await synced();assert.equal(await page.evaluate(()=>state.missionNotes.M01.text),'');
  const dl=page.waitForEvent('download');await page.locator('#cloudExport').click();const exported=JSON.parse(await fs.readFile(await (await dl).path(),'utf8'));assert.equal(exported.projectId,'edfwb2-checklist');
  await page.setViewportSize({width:390,height:844});await page.screenshot({path:'outputs/cloud-mobile.png'});
  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);assert.equal(await page.locator('#cloudDialog').evaluate(e=>e.scrollWidth<=e.clientWidth),true);

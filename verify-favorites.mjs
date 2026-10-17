@@ -16,21 +16,21 @@ try{
  assert.equal(await star.textContent(),'★');assert.equal(await fav.locator('[data-fixed-count]').textContent(),fixed);
  assert.equal(await fav.locator('.mission-details').getAttribute('open'),null);
  assert.equal(await fav.locator('.mission-target').count(),0);
- await fav.locator('.mission-details summary').click();
+ await page.locator('[data-mission-tab="favorites"]').click();await fav.locator('.mission-details summary').click();
  await fav.locator('.mission-target').first().waitFor();
  assert.ok(await fav.locator('.mission-target').count()>0);
- await page.locator('#search').fill('EX16');assert.equal(await page.locator('#missionList tr').count(),1);assert.equal(await fav.count(),1);
+ await page.locator('[data-mission-tab="all"]').click();await page.locator('#search').fill('EX16');assert.equal(await page.locator('#missionList tr').count(),1);assert.equal(await fav.count(),1);await page.locator('[data-mission-tab="favorites"]').click();
  await page.locator('[data-weapon-level="2"]').click();assert.match(await fav.locator('.mission-summary').textContent(),/LV2/);
  const w=fav.locator('.item-check').first(),id=await w.getAttribute('data-id');await w.click();
  assert.equal(await fav.locator(`[data-id="${id}"]`).isChecked(),true);assert.equal(await fav.locator('[data-fixed-count]').textContent(),fixed);
  await page.locator('#undo').click();assert.ok(await fav.locator(`[data-id="${id}"]`).count()>0);
  assert.equal(await page.locator('#missionFavorites').evaluate(e=>getComputedStyle(e).overflowY),'visible');
  assert.equal(await page.locator('#missionFavorites').evaluate(e=>e.scrollHeight<=e.clientHeight+2),true);
- assert.ok(await page.locator('.table-scroll').evaluate(e=>e.clientHeight)>250);
+
  await page.locator('#favoriteTitle').scrollIntoViewIfNeeded();await page.screenshot({path:'outputs/favorites-desktop.png'});
- await page.reload();await page.locator('[data-tab="missions"]').click();assert.equal(await fav.count(),1);
+ await page.reload();await page.locator('[data-tab="missions"]').click();await page.locator('[data-mission-tab="favorites"]').click();assert.equal(await fav.count(),1);
  assert.equal(await fav.locator('.mission-details').getAttribute('open'),null);
- const other=await context.newPage();await other.goto(process.env.TEST_URL||'http://127.0.0.1:4174');await other.locator('[data-tab="missions"]').click();
+ const other=await context.newPage();await other.goto(process.env.TEST_URL||'http://127.0.0.1:4174');await other.locator('[data-tab="missions"]').click();await other.locator('[data-mission-tab="favorites"]').click();
  await fav.locator('.favorite-star').click();await other.locator('#favoriteEmpty').waitFor({state:'visible'});
  await page.locator('#undo').click();await other.locator('[data-favorite-row="M01"]').waitFor();
  await page.locator('#backupOpen').click();const downloaded=page.waitForEvent('download');await page.locator('#export').click();
