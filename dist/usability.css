@@ -33,6 +33,12 @@ body[data-section="missions"] #weaponLevelStats{grid-template-columns:repeat(5,m
 @media(max-width:720px){.topbar{align-items:flex-start;gap:8px}.header-info{width:100%}.header-info .eyebrow{display:none}.translation-notice{margin:0}.save-tools{width:100%}}
 .cloud-quick{font-size:11px;padding:6px 9px;white-space:normal}.cloud-quick.error{color:#a64837;border-color:#c78577}.save-tools{flex-wrap:wrap}.cloud-auto{display:flex;align-items:center;gap:8px;font-weight:600}.cloud-auto input{width:18px;height:18px;accent-color:var(--accent)}.cloud-auto-note{font-size:12px;color:var(--muted);line-height:1.6}
 /* Mission subtabs use the document's scroll, including expanded checklists. */
+.mission-view-controls{gap:12px}.mission-view-controls>span{font-size:11px}.mission-view-controls input{accent-color:var(--accent)}
+.mission-focus-list{margin:8px 0 0;padding-left:20px;font-size:12px;line-height:1.9;overflow-wrap:anywhere}
+.mission-focus-list li{padding:5px 0;border-bottom:1px solid var(--line)}.mission-focus-list li:last-child{border-bottom:0}
+.mission-focus-list strong{font-weight:600}.mission-focus-versions{color:var(--accent);white-space:nowrap}
+.mission-focus-list small,.mission-focus-boxes small{display:block;font-size:10px;line-height:1.7;color:var(--muted)}
+.mission-focus-boxes{margin-top:10px;padding:10px;background:#f7f0df;border:1px solid #e1d8bf;border-radius:4px;font-size:11px;line-height:1.8;overflow-wrap:anywhere}.mission-focus-boxes ul{margin:4px 0 0;padding-left:18px}
 body[data-section="missions"] main{height:auto;min-height:100dvh}
 body[data-section="missions"] .workspace{flex:none;overflow:visible}
 body[data-section="missions"] .table-scroll{flex:none;height:auto;max-height:none;overflow:visible}
