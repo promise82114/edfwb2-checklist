@@ -75,24 +75,26 @@ try{
  await page.keyboard.press('End');assert.equal(await tab('favorites').getAttribute('aria-selected'),'true');
  await page.locator('[data-tab="weapons"]').click();assert.equal(await page.locator('#missionTabs').isVisible(),false);assert.equal(await page.locator('#missionFavorites').isVisible(),false);
  assert.equal(await page.locator('#collectionTable').isVisible(),true);assert.equal(await page.locator('.toolbar').isVisible(),true);
- // Focus view lists rescue targets immediately, including owned characters with missing weapons.
+ // Focus view stays collapsed until the selected mission is opened.
  await page.locator('[data-tab="missions"]').click();await tab('all').click();await page.locator('#search').fill('M74');
  const focus=page.locator('#missionFocus'),focusRow=page.locator('[data-mission-row="M74"]');
  const fixture=await page.evaluate(()=>{const m=missionData().rows.find(m=>m.code==='M74'),target=m.targets.find(t=>['α','β','γ'].every(v=>m.targets.some(x=>x.character.name===t.character.name&&x.character.variant===v)));return {name:target.character.name,character:target.character.id,weapon:target.weapons[0].id,weaponName:target.weapons[0].name};});
  const beforeFocus=await page.evaluate(()=>JSON.stringify(state.entries));await focus.check();
  assert.equal(await page.evaluate(()=>JSON.stringify(state.entries)),beforeFocus);
- assert.equal(await focusRow.locator('.mission-details').count(),0);
+ assert.equal(await focusRow.locator('.mission-details').count(),1);assert.equal(await focusRow.locator('.mission-details').getAttribute('open'),null);assert.equal(await focusRow.locator('.mission-focus-list').count(),0);
+ await focusRow.locator('summary').click();await focusRow.locator('.mission-focus-list').waitFor();
  const focusTarget=focusRow.locator('[data-focus-character="'+fixture.name+'"]');
  assert.equal(await focusTarget.count(),1);assert.match(await focusTarget.locator('.mission-focus-versions').textContent(),/α／β／γ/);
  assert.ok((await focusTarget.textContent()).includes(fixture.weaponName));
+ await focusRow.locator('summary').click();assert.equal(await focusRow.locator('.mission-focus-list').isVisible(),false);await focusRow.locator('summary').click();
  await page.evaluate(id=>change([catalog.items.find(i=>i.id===id)],true),fixture.character);assert.equal(await focusTarget.count(),1);
  await page.evaluate(id=>change([catalog.items.find(i=>i.id===id)],true),fixture.weapon);
  assert.equal((await focusTarget.count())?(await focusTarget.textContent()).includes(fixture.weaponName):false,false);
  await page.locator('#undo').click();assert.ok((await focusTarget.textContent()).includes(fixture.weaponName));
  await focusRow.locator('.favorite-star').click();await tab('favorites').click();
- assert.equal(await focus.isVisible(),true);assert.equal(await page.locator('[data-favorite-row="M74"] .mission-focus-list').isVisible(),true);
+ assert.equal(await focus.isVisible(),true);assert.equal(await page.locator('[data-favorite-row="M74"] .mission-details').getAttribute('open'),null);await page.locator('[data-favorite-row="M74"] summary').click();await page.locator('[data-favorite-row="M74"] .mission-focus-list').waitFor();
  assert.equal(await page.locator('[data-mission-note="M74"]').isVisible(),true);
- await tab('recommended').click();assert.equal(await page.locator('[data-recommended-row="M74"] .mission-focus-list').isVisible(),true);
+ await tab('recommended').click();assert.equal(await page.locator('[data-recommended-row="M74"] .mission-details').getAttribute('open'),null);await page.locator('[data-recommended-row="M74"] summary').click();await page.locator('[data-recommended-row="M74"] .mission-focus-list').waitFor();
  await page.locator('[data-mission-mode="characters"]').click();assert.equal(await focus.isDisabled(),true);assert.equal(await page.locator('#recommendedMissionList .mission-focus-list').count(),0);
  await page.locator('[data-weapon-level="2"]').click();assert.equal(await focus.isChecked(),true);assert.equal(await focus.isDisabled(),false);
  await focus.uncheck();assert.equal(await page.locator('#recommendedMissionList .mission-focus-list').count(),0);assert.ok(await page.locator('#recommendedMissionList .mission-details').count()>0);
@@ -100,7 +102,7 @@ try{
  await page.setViewportSize({width:390,height:844});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);await page.screenshot({path:'outputs/mission-focus-mobile.png'});
  // Weapon-box rewards never appear as a character's rescue weapon.
  await page.locator('#settingsOpen').click();await page.locator('#content-mission-pack').check();await page.locator('#settingsDialog .close').click();
- await tab('all').click();await page.locator('#search').fill('EX03');assert.ok(await page.locator('#missionList .mission-focus-boxes').count()>0);
+ await tab('all').click();await page.locator('#search').fill('EX03');await page.locator('#missionList summary').click();await page.locator('#missionList .mission-focus-boxes').waitFor();
  const boxNames=await page.evaluate(()=>missionData().rows.find(m=>m.code==='EX03').boxes.map(w=>w.name));
  const rescueText=await page.locator('#missionList .mission-focus-list').allTextContents();for(const name of boxNames)assert.equal(rescueText.join(' ').includes(name),false);
  await page.locator('[data-tab="weapons"]').click();assert.equal(await page.locator('#missionViewControls').isVisible(),false);

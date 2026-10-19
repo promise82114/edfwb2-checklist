@@ -140,7 +140,7 @@ function refreshOptions(){
   $('sectionNote').textContent='依攻略地區／版本推算角色候選，α／β／γ 分列並依 DLC 設定增減。武器模式合併同把武器的相關角色；角色模式只列未取得角色。候選占比不是掉落機率。';
   for(const head of document.querySelectorAll('[data-mission-target-head]'))head.textContent=missionMode==='characters'?'未取得角色':'未取得武器 / 對應角色';
   $('missionSort').querySelector('[value="weapons"]').textContent=missionMode==='characters'?'未取得角色數多 → 少':'未取得武器數多 → 少';
-  $('missionFavorites').querySelector('.section-note').textContent='你的刷關捷徑 · 隨上方補收模式與收集進度更新，不受搜尋或範圍篩選影響。';
+  $('missionFavorites').querySelector('.section-note').textContent='你的刷關捷徑 · 可搜尋、排序及篩選收藏關卡，隨上方補收模式與收集進度更新。';
   return;
  }
  const items=sectionItems(),category=$('category').value,level=$('level').value;
@@ -213,6 +213,7 @@ function missionFocusContent(m){
  return rescue+boxes;
 }
 function missionContent(m,view='missionList'){
+ if(missionFocusEnabled())return missionFocusContent(m);
  if(missionMode==='characters')return '<div class="mission-target-grid character-target-grid">'+m.missingCharacters.map(c=>`<article class="mission-target character-target" data-character-id="${escape(c.id)}"><label class="mission-character-check"><input class="item-check" type="checkbox" data-id="${escape(c.id)}" aria-label="${escape(displayName(c)+' 已取得')}"><span><strong>${escape(displayName(c))}</strong><small>${escape(translatedName(c))}</small></span></label><a class="source-link" href="${escape(c.source)}" target="_blank" rel="noopener">Wiki ↗</a></article>`).join('')+'</div>';
  return '<div class="mission-target-grid">'+visibleWeaponTargets(m,view).map(t=>{
   const owners=new Map();for(const c of t.characters){if(!owners.has(c.name))owners.set(c.name,[]);owners.get(c.name).push(c);}
@@ -226,19 +227,44 @@ function missionContent(m,view='missionList'){
 function missionRow(m,open=false,view='missionList'){
  const isFavoriteView=view==='favoriteMissionList',isRecommendedView=view==='recommendedMissionList',recommendation=recommendationByCode.get(m.code);
  const characters=missionMode==='characters',displayTargets=visibleWeaponTargets(m,view),count=characters?m.usefulCount:displayTargets.length+m.boxes.length;
- const preview=characters?m.missingCharacters.slice(0,2).map(translatedName):[...displayTargets.map(t=>t.weapon),...m.boxes].slice(0,2).map(w=>nameZh(w.name));
- return `<tr data-${isFavoriteView?'favorite-row':isRecommendedView?'recommended-row':'mission-row'}="${m.code}"><td class="mission-code"><div class="mission-title"><button class="favorite-star" data-favorite-mission="${m.code}" aria-pressed="${favorite(m.code)}" aria-label="${favorite(m.code)?'取消':'加入'} ${m.code} 我的最愛">${favorite(m.code)?'★':'☆'}</button><strong>${m.code}</strong></div><small>${m.extra?'DLC':'本篇'}</small>${isRecommendedView?'<span class="recommended-title">'+escape(recommendation.title)+'</span>':''}</td><td class="mission-fixed"><strong data-fixed-count>${m.known?m.candidates.length+' 名角色':'未記載'}</strong><small>${m.noRescue?'無救出角色':m.known?'α／β／γ 分列 · 依 DLC 設定':'角色分布待確認'}</small>${m.uncertain.length?'<small>含攻略「？」資料</small>':''}</td><td><div class="mission-summary">${m.noRescue?'無救出角色':m.known?characters?`未取得角色 <b>${count} / ${m.candidates.length} 名</b> · ${Math.round(m.coverage*100)}%`:`未取得武器 <b>武器LV${missionLevel}：${m.weapons.length} 把</b>`:'救出分布待確認'}<span>${characters?'依角色版本補漏':`補收候選角色 ${m.targets.length} / ${m.candidates.length} 名 · ${Math.round(m.coverage*100)}%${m.boxes.length?' · 含 '+m.boxes.length+' 把 DLC 武器箱':''}`}</span></div>${missionFocusEnabled()?missionFocusContent(m):count?`<details class="mission-details" data-mission="${m.code}" ${open?'open':''}><summary>${characters?'查看未取得角色':m.weapons.length?'查看未取得武器':'繼續勾選相關角色'} · ${preview.map(escape).join('、')}${count>2?'…':''}</summary><div class="mission-content">${open?missionContent(m,view):''}</div></details>`:`<div class="appearance-note">${m.noRescue?'此關不出現救出角色':m.known?characters?'此關候選角色皆已取得':'此 LV 已無可對應的補收武器':'攻略未提供此關分布，請以遊戲任務簡報核對'}</div>`}</td>${isFavoriteView?`<td class="mission-note-cell"><label><span class="mobile-column-label">筆記</span><textarea data-mission-note="${m.code}" aria-label="${m.code} 筆記" maxlength="5000" rows="3" placeholder="記下隊伍、路線或待收集目標…">${escape(missionNote(m.code))}</textarea></label><small>自動儲存 · 最多 5000 字</small></td>`:isRecommendedView?`<td class="mission-reason"><span class="mobile-column-label">推薦原因</span>${escape(recommendation.reason)}</td>`:''}</tr>`;
+ const preview=missionFocusEnabled()?[...new Set(m.targets.map(t=>nameZh(t.character.name)))].slice(0,2):characters?m.missingCharacters.slice(0,2).map(translatedName):[...displayTargets.map(t=>t.weapon),...m.boxes].slice(0,2).map(w=>nameZh(w.name));
+ return `<tr data-${isFavoriteView?'favorite-row':isRecommendedView?'recommended-row':'mission-row'}="${m.code}"><td class="mission-code"><div class="mission-title"><button class="favorite-star" data-favorite-mission="${m.code}" aria-pressed="${favorite(m.code)}" aria-label="${favorite(m.code)?'取消':'加入'} ${m.code} 我的最愛">${favorite(m.code)?'★':'☆'}</button><strong>${m.code}</strong></div><small>${m.extra?'DLC':'本篇'}</small>${isRecommendedView?'<span class="recommended-title">'+escape(recommendation.title)+'</span>':''}</td><td class="mission-fixed"><strong data-fixed-count>${m.known?m.candidates.length+' 名角色':'未記載'}</strong><small>${m.noRescue?'無救出角色':m.known?'α／β／γ 分列 · 依 DLC 設定':'角色分布待確認'}</small>${m.uncertain.length?'<small>含攻略「？」資料</small>':''}</td><td><div class="mission-summary">${m.noRescue?'無救出角色':m.known?characters?`未取得角色 <b>${count} / ${m.candidates.length} 名</b> · ${Math.round(m.coverage*100)}%`:`未取得武器 <b>武器LV${missionLevel}：${m.weapons.length} 把</b>`:'救出分布待確認'}<span>${characters?'依角色版本補漏':`補收候選角色 ${m.targets.length} / ${m.candidates.length} 名 · ${Math.round(m.coverage*100)}%${m.boxes.length?' · 含 '+m.boxes.length+' 把 DLC 武器箱':''}`}</span></div>${count?`<details class="mission-details" data-mission="${m.code}" ${open?'open':''}><summary>${missionFocusEnabled()?'查看角色與未取得武器':characters?'查看未取得角色':m.weapons.length?'查看未取得武器':'繼續勾選相關角色'} · ${preview.map(escape).join('、')}${count>2?'…':''}</summary><div class="mission-content">${open?missionContent(m,view):''}</div></details>`:`<div class="appearance-note">${m.noRescue?'此關不出現救出角色':m.known?characters?'此關候選角色皆已取得':'此 LV 已無可對應的補收武器':'攻略未提供此關分布，請以遊戲任務簡報核對'}</div>`}</td>${isFavoriteView?`<td class="mission-note-cell"><label><span class="mobile-column-label">筆記</span><textarea data-mission-note="${m.code}" aria-label="${m.code} 筆記" maxlength="5000" rows="3" placeholder="記下隊伍、路線或待收集目標…">${escape(missionNote(m.code))}</textarea></label><small>自動儲存 · 最多 5000 字</small></td>`:isRecommendedView?`<td class="mission-reason"><span class="mobile-column-label">推薦原因</span>${escape(recommendation.reason)}</td>`:''}</tr>`;
 }
 
-function renderFavorites(rows){const previous=new Map([...$('favoriteMissionList').querySelectorAll('.mission-details')].map(d=>[d.dataset.mission,d.open]));const favorites=rows.filter(m=>favorite(m.code));$('favoriteMissionList').innerHTML=favorites.map(m=>missionRow(m,previous.get(m.code)??false,'favoriteMissionList')).join('');$('favoriteCount').textContent=favorites.length+' 關 · '+(missionMode==='characters'?'角色':'武器LV'+missionLevel);$('favoriteEmpty').hidden=!!favorites.length;$('favoriteMissionTable').hidden=!favorites.length;document.body.dataset.hasFavorites=String(!!favorites.length);$('favoriteMissionList').querySelectorAll('textarea').forEach(resizeNote);}
+function renderFavorites(visible,rows){
+ const previous=new Map([...$('favoriteMissionList').querySelectorAll('.mission-details')].map(d=>[d.dataset.mission,d.open]));
+ const total=rows.filter(m=>favorite(m.code)).length,favorites=visible.filter(m=>favorite(m.code));
+ $('favoriteMissionList').innerHTML=favorites.map(m=>missionRow(m,previous.get(m.code)??false,'favoriteMissionList')).join('');
+ $('favoriteCount').textContent=favorites.length+' / '+total+' 關 · '+(missionMode==='characters'?'角色':'武器LV'+missionLevel);
+ $('favoriteEmpty').hidden=!!favorites.length;
+ $('favoriteEmpty').textContent=total?'沒有符合搜尋或篩選的收藏關卡，試試調整條件。':'點一下關卡名稱前的 ☆，就會加入這裡。收藏與筆記會自動儲存並納入備份。';
+ $('favoriteClearFilters').hidden=!total||!!favorites.length;
+ $('favoriteMissionTable').hidden=!favorites.length;document.body.dataset.hasFavorites=String(!!total);
+ $('favoriteMissionList').querySelectorAll('textarea').forEach(resizeNote);
+}
+function filterMissionRows(rows,q,view){
+ const visible=rows.filter(m=>($('scope').value==='all'||($('scope').value==='extra'?m.extra:!m.extra))
+  &&(!$('missionOnlyUseful').checked||m.usefulCount>0||(missionMode==='weapons'&&visibleWeaponTargets(m,view).some(t=>owned(t.weapon))))
+  &&(!q||[m.code,...(missionMode==='characters'?m.missingCharacters:m.targets.map(t=>t.character)).flatMap(c=>[displayName(c),translatedName(c)]),
+   ...(missionMode==='characters'?[]:[...visibleWeaponTargets(m,view).map(t=>t.weapon),...m.boxes]).flatMap(w=>[w.name,nameZh(w.name)]),
+   ...(view==='favoriteMissionList'?[missionNote(m.code)]:[]),
+   ...(view==='recommendedMissionList'?[recommendationByCode.get(m.code)?.title||'',recommendationByCode.get(m.code)?.reason||'']:[])
+  ].join(' ').normalize('NFKC').toLocaleLowerCase().includes(q)));
+ const sort=$('missionSort').value;
+ if(sort==='coverage')visible.sort((a,b)=>b.coverage-a.coverage||b.usefulCount-a.usefulCount);
+ if(sort==='weapons')visible.sort((a,b)=>b.usefulCount-a.usefulCount||b.coverage-a.coverage);
+ return visible;
+}
 function renderMissions(){
  const noteFocus=document.activeElement?.matches('[data-mission-note]')?{code:document.activeElement.dataset.missionNote,start:document.activeElement.selectionStart,end:document.activeElement.selectionEnd,undo:document.activeElement.noteUndo}:null;
  const openKeys=new Set([...document.querySelectorAll('#missionList .mission-details[open],#favoriteMissionList .mission-details[open],#recommendedMissionList .mission-details[open]')].map(d=>retainedKey(d.closest('tbody').id,d.dataset.mission)));
  for(const key of retainedMissionWeapons.keys())if(!openKeys.has(key))retainedMissionWeapons.delete(key);
- const opened=new Set([...$('missionList').querySelectorAll('details[open]')].map(x=>x.dataset.mission));const {missing,rows}=missionData(),q=$('search').value.trim().normalize('NFKC').toLocaleLowerCase();missionRows=rows;const listView=missionTab==='recommended'?'recommendedMissionList':'missionList';let visible=rows.filter(m=>($('scope').value==='all'||($('scope').value==='extra'?m.extra:!m.extra))&&(!$('missionOnlyUseful').checked||m.usefulCount>0||(missionMode==='weapons'&&visibleWeaponTargets(m,listView).some(t=>owned(t.weapon))))&&(!q||[m.code,...(missionMode==='characters'?m.missingCharacters:m.targets.map(t=>t.character)).flatMap(c=>[displayName(c),translatedName(c)]),...(missionMode==='characters'?[]:[...visibleWeaponTargets(m,listView).map(t=>t.weapon),...m.boxes]).flatMap(w=>[w.name,nameZh(w.name)]),...(missionTab==='recommended'?[recommendationByCode.get(m.code)?.title||'',recommendationByCode.get(m.code)?.reason||'']:[])].join(' ').normalize('NFKC').toLocaleLowerCase().includes(q)));const sort=$('missionSort').value;if(sort==='coverage')visible.sort((a,b)=>b.coverage-a.coverage||b.usefulCount-a.usefulCount);if(sort==='weapons')visible.sort((a,b)=>b.usefulCount-a.usefulCount||b.coverage-a.coverage);
+ const opened=new Set([...$('missionList').querySelectorAll('details[open]')].map(x=>x.dataset.mission));
+ const {missing,rows}=missionData(),q=$('search').value.trim().normalize('NFKC').toLocaleLowerCase();missionRows=rows;
+ const visible=filterMissionRows(rows,q,'missionList'),favoriteVisible=filterMissionRows(rows,q,'favoriteMissionList'),recommendedVisible=filterMissionRows(rows,q,'recommendedMissionList');
  $('missionList').innerHTML=visible.map(m=>missionRow(m,opened.has(m.code))).join('');
- renderFavorites(rows);renderRecommended(visible);updateMissionPanels();
- const nonRescue=missing.filter(w=>acquisitionOf(w).method!=='rescue'&&(!acquisitionOf(w).missions?.length));const unmapped=missing.filter(w=>acquisitionOf(w).method==='rescue'&&!rows.some(m=>m.weapons.some(x=>x.id===w.id)));const other=[...nonRescue,...unmapped];$('missionOther').hidden=missionTab!=='all'||missionMode==='characters'||!other.length;$('missionOther').innerHTML=other.length?`<details><summary>另有 ${other.length} 把 LV${missionLevel}：購買／通關數獎勵／未能對應救出關卡（不混入候選角色）</summary><div class="mission-other-content">${other.map(w=>weaponChecklist(w,acquisitionOf(w).note||'救出關卡未記載')).join('')}</div></details>`:'';$('sectionCount').textContent='本篇 104 關'+(contentEnabled('mission-pack')?' ＋ DLC 16 關':'');$('results').textContent='顯示 '+(missionTab==='favorites'?rows.filter(m=>favorite(m.code)).length:missionTab==='recommended'?visible.filter(m=>recommendationByCode.has(m.code)).length:visible.length)+' / '+(missionTab==='recommended'?recommendations.rows.length:rows.length)+' 關 · '+(missionMode==='characters'?'未取得角色 '+availableItems().filter(i=>i.kind==='characters'&&!owned(i)).length+' 名':'武器LV'+missionLevel+' 未取得 '+missing.length+' 把');$('empty').hidden=missionTab!=='all'||visible.length>0;$('undo').disabled=!undoStack.length;stats();weaponLevelStats();accessoryCategoryStats();
+ renderFavorites(favoriteVisible,rows);renderRecommended(recommendedVisible);updateMissionPanels();
+ const nonRescue=missing.filter(w=>acquisitionOf(w).method!=='rescue'&&(!acquisitionOf(w).missions?.length));const unmapped=missing.filter(w=>acquisitionOf(w).method==='rescue'&&!rows.some(m=>m.weapons.some(x=>x.id===w.id)));const other=[...nonRescue,...unmapped];$('missionOther').hidden=missionTab!=='all'||missionMode==='characters'||!other.length;$('missionOther').innerHTML=other.length?`<details><summary>另有 ${other.length} 把 LV${missionLevel}：購買／通關數獎勵／未能對應救出關卡（不混入候選角色）</summary><div class="mission-other-content">${other.map(w=>weaponChecklist(w,acquisitionOf(w).note||'救出關卡未記載')).join('')}</div></details>`:'';$('sectionCount').textContent='本篇 104 關'+(contentEnabled('mission-pack')?' ＋ DLC 16 關':'');$('results').textContent='顯示 '+(missionTab==='favorites'?favoriteVisible.filter(m=>favorite(m.code)).length:missionTab==='recommended'?recommendedVisible.filter(m=>recommendationByCode.has(m.code)).length:visible.length)+' / '+(missionTab==='recommended'?recommendations.rows.length:missionTab==='favorites'?rows.filter(m=>favorite(m.code)).length:rows.length)+' 關 · '+(missionMode==='characters'?'未取得角色 '+availableItems().filter(i=>i.kind==='characters'&&!owned(i)).length+' 名':'武器LV'+missionLevel+' 未取得 '+missing.length+' 把');$('empty').hidden=missionTab!=='all'||visible.length>0;$('undo').disabled=!undoStack.length;stats();weaponLevelStats();accessoryCategoryStats();
  $('missionOther').querySelector('details')?.toggleAttribute('open',missionOtherExpanded);
  if(noteFocus&&missionTab==='favorites'){const input=$('favoriteMissionList').querySelector('[data-mission-note="'+noteFocus.code+'"]');if(input){input.focus({preventScroll:true});input.setSelectionRange(noteFocus.start,noteFocus.end);input.noteUndo=noteFocus.undo;}}
 }
@@ -250,9 +276,10 @@ function renderRecommended(rows){
 }
 function updateMissionPanels(){
  $('missionFocus').disabled=missionMode!=='weapons';
- $('missionFocusHint').textContent=missionMode==='weapons'?'依「角色：武器」條列，進關前確認救援目標。':'切換至武器 LV 模式可使用重點查看。';
+ $('missionFocusHint').textContent=missionMode==='weapons'?'展開關卡，以「角色：武器」條列確認救援目標。':'切換至武器 LV 模式可使用重點查看。';
  $('missionAllPanel').hidden=missionTab!=='all';$('missionRecommendedPanel').hidden=missionTab!=='recommended';$('missionFavorites').hidden=missionTab!=='favorites';
- document.querySelector('.toolbar').hidden=missionTab==='favorites';$('missionControls').hidden=missionTab==='favorites';
+ document.querySelector('.toolbar').hidden=false;$('missionControls').hidden=false;
+ $('search').placeholder=missionTab==='favorites'?'搜尋收藏關卡、未取得武器、角色或筆記…':'搜尋關卡、未取得武器或角色…';
  document.querySelectorAll('[data-mission-tab]').forEach(b=>{const selected=b.dataset.missionTab===missionTab;b.setAttribute('aria-selected',String(selected));b.tabIndex=selected?0:-1;});
  if(missionTab==='favorites')$('favoriteMissionList').querySelectorAll('textarea').forEach(resizeNote);
 }
@@ -280,6 +307,7 @@ $('characterAccessoryFilters').addEventListener('change',e=>{
 $('clearCharacterAccessories').onclick=()=>{resetCharacterAccessoryFilters();render();};
 $('accessoryCategoryStats').onclick=e=>{const b=e.target.closest('[data-accessory-category]');if(!b)return;const value=b.dataset.accessoryCategory;$('category').value=$('category').value===value?'':value;render();};
 $('missionFocus').onchange=()=>{retainedMissionWeapons.clear();render();};
+$('favoriteClearFilters').onclick=()=>{$('search').value='';$('scope').value='all';$('missionOnlyUseful').checked=false;render();};
 $('missionSort').onchange=render;$('missionOnlyUseful').onchange=render;
 $('missionTabs').onclick=e=>{const b=e.target.closest('[data-mission-tab]');if(b)switchMissionTab(b.dataset.missionTab);};
 $('missionTabs').onkeydown=e=>{
