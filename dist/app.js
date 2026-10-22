@@ -27,7 +27,7 @@ const contentIds=new Set(content.options.map(o=>o.id));
 function contentEnabled(id){return state.content?.[id]?.enabled===true;}
 function available(i){if(content.excluded.includes(i.id))return false;const required=content.requirements[i.id];return required?contentEnabled(required):!i.extra;}
 function availableItems(){return catalog.items.filter(available);}
-const categoriesZh={'連射':'連射','拡散':'擴散','長射程':'長射程','爆発':'爆炸','剛撃':'強擊','誘導':'導引','近接格闘':'近身格鬥','特殊':'特殊','ボディ':'身體','ハンド':'手部','フット':'足部','オーナメント':'飾品','アジア':'亞洲','アフリカ':'非洲','南北アメリカ':'南北美洲','アメリカ':'美洲','ヨーロッパ':'歐洲','中東':'中東','オセアニア':'大洋洲','デジボク':'方塊地球防衛軍','EDF1&2':'EDF 1／2','EDF3&4':'EDF 3／4','EDF5&6':'EDF 5／6','EDF:IA&IR':'EDF IA／IR'};
+const categoriesZh={'連射':'連射','拡散':'擴散','長射程':'長射程','爆発':'爆炸','剛撃':'強擊','誘導':'追蹤','近接格闘':'近戰','特殊':'特殊','ボディ':'身體','ハンド':'手部','フット':'足部','オーナメント':'飾品','アジア':'亞洲','アフリカ':'非洲','南北アメリカ':'南北美洲','アメリカ':'美洲','ヨーロッパ':'歐洲','中東':'中東','オセアニア':'大洋洲','デジボク':'方塊地球防衛軍','EDF1&2':'EDF 1／2','EDF3&4':'EDF 3／4','EDF5&6':'EDF 5／6','EDF:IA&IR':'EDF IA／IR'};
 const variantsZh={'α':'阿法','β':'貝塔','γ':'嘎瑪','無印':'無印'};
 const nameZh=n=>translations.names[n]||n;
 const familyZh=n=>translations.families[n]||translations.names[n]||n;
@@ -35,7 +35,7 @@ const characterMeta=n=>details.characters[n];
 function categoryOf(i){return i.kind==='characters'?(characterMeta(i.name)?.pool||i.category):i.category;}
 function characterSuffix(i){return /[αβγ]$/.test(i.name)?'':i.variant;}
 function displayName(i){return i.name+(i.kind==='characters'?characterSuffix(i):'');}
-function translatedName(i){return nameZh(i.name)+(i.kind==='characters'?(variantsZh[characterSuffix(i)]||''):'');}
+function translatedName(i){const suffix=i.kind==='characters'&&!translations.versionlessCharacters?.includes(i.name)?characterSuffix(i):'';return nameZh(i.name)+(suffix&&suffix!=='無印'?' '+suffix:'');}
 function rescueSlot(name,variant){if(name==='コロニスト')return 'β';if(name==='コスモノーツ')return 'γ';const c=characterMeta(name);return c?.variants.length===1?'α':variant;}
 function candidateGroups(name,variant){const c=characterMeta(name);if(!c)return [];const option=content.options.find(o=>o.characters.includes(name));if(option&&!contentEnabled(option.id))return [];const slot=rescueSlot(name,variant);return details.groups.filter(g=>(!g.extra||contentEnabled('mission-pack'))&&g.pools[c.pool]?.includes(slot));}
 function rangeLabel(g){return (g.extra?'EX':'M')+String(g.start).padStart(2,'0')+(g.start===g.end?'':'–'+String(g.end).padStart(2,'0'));}
