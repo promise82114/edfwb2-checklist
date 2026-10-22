@@ -34,7 +34,7 @@ try{
  page.on('pageerror',error=>errors.push(error.message));
  await page.goto(process.env.TEST_URL||new URL('./dist/index.html',import.meta.url).href);
  await page.locator('#list tr').first().waitFor();
- assert.match(await page.locator('.translation-notice').textContent(),/部分角色／武器名稱已核對遊戲繁中/);
+ assert.match(await page.locator('.translation-notice').textContent(),/部分名稱已依遊戲繁中核對/);
  const rowFor=id=>page.locator('#list tr').filter({has:page.locator('.item-check[data-id="'+id+'"]')});
  await page.locator('[data-tab="characters"]').click();
  assert.equal(await page.locator('#list tr').count(),295);
